@@ -36,6 +36,14 @@ from chatchat.utils import build_logger
 logger = build_logger()
 
 
+def _load_splitter_config(splitter_config: str | dict | None) -> dict:
+    if isinstance(splitter_config, dict):
+        return splitter_config
+    if not splitter_config:
+        return {}
+    return json.loads(splitter_config)
+
+
 def search_temp_docs(knowledge_id: str = Body(..., description="知识库 ID", examples=["example_id"]),
                      query: str = Body("", description="用户输入", examples=["你好"]),
                      top_k: int = Body(..., description="返回的文档数量", examples=[5]),
@@ -166,6 +174,8 @@ def upload_docs(
         chunk_size: int = Form(Settings.kb_settings.CHUNK_SIZE, description="知识库中单段文本最大长度"),
         chunk_overlap: int = Form(Settings.kb_settings.OVERLAP_SIZE, description="知识库中相邻文本重合长度"),
         zh_title_enhance: bool = Form(Settings.kb_settings.ZH_TITLE_ENHANCE, description="是否开启中文标题加强"),
+        text_splitter_name: str = Form(Settings.kb_settings.TEXT_SPLITTER_NAME, description="文本切分器名称"),
+        text_splitter_config: str = Form("", description="文本切分器配置，需要转为json字符串"),
         docs: str = Form("", description="自定义的docs，需要转为json字符串"),
         not_refresh_vs_cache: bool = Form(False, description="暂不保存向量库（用于FAISS）"),
 ) -> BaseResponse:
@@ -180,6 +190,7 @@ def upload_docs(
         return BaseResponse(code=404, msg=f"未找到知识库 {knowledge_base_name}")
 
     docs = json.loads(docs) if docs else {}
+    text_splitter_config = _load_splitter_config(text_splitter_config)
     failed_files = {}
     file_names = list(docs.keys())
 
@@ -203,6 +214,8 @@ def upload_docs(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             zh_title_enhance=zh_title_enhance,
+            text_splitter_name=text_splitter_name,
+            text_splitter_config=text_splitter_config,
             docs=docs,
             not_refresh_vs_cache=True,
         )
@@ -279,6 +292,8 @@ def update_docs(
         chunk_size: int = Body(Settings.kb_settings.CHUNK_SIZE, description="知识库中单段文本最大长度"),
         chunk_overlap: int = Body(Settings.kb_settings.OVERLAP_SIZE, description="知识库中相邻文本重合长度"),
         zh_title_enhance: bool = Body(Settings.kb_settings.ZH_TITLE_ENHANCE, description="是否开启中文标题加强"),
+        text_splitter_name: str = Body(Settings.kb_settings.TEXT_SPLITTER_NAME, description="文本切分器名称"),
+        text_splitter_config: str | dict = Body({}, description="文本切分器配置"),
         override_custom_docs: bool = Body(False, description="是否覆盖之前自定义的docs"),
         docs: str = Body("", description="自定义的docs，需要转为json字符串"),
         not_refresh_vs_cache: bool = Body(False, description="暂不保存向量库（用于FAISS）"),
@@ -296,6 +311,7 @@ def update_docs(
     failed_files = {}
     kb_files = []
     docs = json.loads(docs) if docs else {}
+    text_splitter_config = _load_splitter_config(text_splitter_config)
 
     # 生成需要加载docs的文件列表
     for file_name in file_names:
@@ -307,7 +323,10 @@ def update_docs(
             try:
                 kb_files.append(
                     KnowledgeFile(
-                        filename=file_name, knowledge_base_name=knowledge_base_name
+                        filename=file_name,
+                        knowledge_base_name=knowledge_base_name,
+                        text_splitter_name=text_splitter_name,
+                        text_splitter_kwargs=text_splitter_config,
                     )
                 )
             except Exception as e:
@@ -322,11 +341,16 @@ def update_docs(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             zh_title_enhance=zh_title_enhance,
+            text_splitter_name=text_splitter_name,
+            text_splitter_kwargs=text_splitter_config,
     ):
         if status:
             kb_name, file_name, new_docs = result
             kb_file = KnowledgeFile(
-                filename=file_name, knowledge_base_name=knowledge_base_name
+                filename=file_name,
+                knowledge_base_name=knowledge_base_name,
+                text_splitter_name=text_splitter_name,
+                text_splitter_kwargs=text_splitter_config,
             )
             kb_file.splited_docs = new_docs
             kb.update_doc(kb_file, not_refresh_vs_cache=True)
@@ -339,7 +363,10 @@ def update_docs(
         try:
             v = [x if isinstance(x, Document) else Document(**x) for x in v]
             kb_file = KnowledgeFile(
-                filename=file_name, knowledge_base_name=knowledge_base_name
+                filename=file_name,
+                knowledge_base_name=knowledge_base_name,
+                text_splitter_name=text_splitter_name,
+                text_splitter_kwargs=text_splitter_config,
             )
             kb.update_doc(kb_file, docs=v, not_refresh_vs_cache=True)
         except Exception as e:
@@ -405,6 +432,8 @@ def recreate_vector_store(
         chunk_size: int = Body(Settings.kb_settings.CHUNK_SIZE, description="知识库中单段文本最大长度"),
         chunk_overlap: int = Body(Settings.kb_settings.OVERLAP_SIZE, description="知识库中相邻文本重合长度"),
         zh_title_enhance: bool = Body(Settings.kb_settings.ZH_TITLE_ENHANCE, description="是否开启中文标题加强"),
+        text_splitter_name: str = Body(Settings.kb_settings.TEXT_SPLITTER_NAME, description="文本切分器名称"),
+        text_splitter_config: str | dict = Body({}, description="文本切分器配置"),
         not_refresh_vs_cache: bool = Body(False, description="暂不保存向量库（用于FAISS）"),
 ):
     """
@@ -416,6 +445,7 @@ def recreate_vector_store(
 
     def output():
         try:
+            splitter_config = _load_splitter_config(text_splitter_config)
             kb = KBServiceFactory.get_service_by_name(knowledge_base_name)
             if kb is None:
                 kb = KBServiceFactory.get_service(knowledge_base_name, vs_type, embed_model)
@@ -437,11 +467,16 @@ def recreate_vector_store(
                             chunk_size=chunk_size,
                             chunk_overlap=chunk_overlap,
                             zh_title_enhance=zh_title_enhance,
+                            text_splitter_name=text_splitter_name,
+                            text_splitter_kwargs=splitter_config,
                     ):
                         if status:
                             kb_name, file_name, docs = result
                             kb_file = KnowledgeFile(
-                                filename=file_name, knowledge_base_name=kb_name
+                                filename=file_name,
+                                knowledge_base_name=kb_name,
+                                text_splitter_name=text_splitter_name,
+                                text_splitter_kwargs=splitter_config,
                             )
                             kb_file.splited_docs = docs
                             yield json.dumps(

@@ -9,6 +9,7 @@ from chatchat.webui_pages.dialogue.dialogue import  dialogue_page
 from chatchat.webui_pages.kb_chat import kb_chat
 from chatchat.webui_pages.mcp import mcp_management_page
 from chatchat.webui_pages.knowledge_base.knowledge_base import knowledge_base_page
+from chatchat.webui_pages.model_config import model_config_page
 from chatchat.webui_pages.utils import *
 
 api = ApiRequest(base_url=api_address())
@@ -50,7 +51,7 @@ if __name__ == "__main__":
             get_img_base64("logo-long-chatchat-trans-v2.png"), use_column_width=True
         )
         st.caption(
-            f"""<p align="right">当前版本：{__version__}</p>""",
+            f"""<p align="right">当前的版本：{__version__}</p>""",
             unsafe_allow_html=True,
         )
 
@@ -59,6 +60,7 @@ if __name__ == "__main__":
                 sac.MenuItem("多功能对话", icon="chat"),
                 sac.MenuItem("RAG 对话", icon="database"),
                 sac.MenuItem("知识库管理", icon="hdd-stack"),
+                sac.MenuItem("系统配置", icon="sliders"),
                 sac.MenuItem("MCP 管理", icon="hdd-stack"),
             ],
             key="selected_page",
@@ -69,6 +71,8 @@ if __name__ == "__main__":
 
     if selected_page == "知识库管理":
         knowledge_base_page(api=api, is_lite=is_lite)
+    elif selected_page == "系统配置":
+        model_config_page(api=api)
     elif selected_page == "RAG 对话":
         kb_chat(api=api)
     elif selected_page == "MCP 管理":

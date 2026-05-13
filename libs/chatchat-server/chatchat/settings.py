@@ -226,6 +226,14 @@ class KBSettings(BaseFileSettings):
                 "source": "",
                 "tokenizer_name_or_path": "",
             },
+            "MinerUSplitter": {
+                "source": "",
+                "tokenizer_name_or_path": "",
+            },
+            "PdfplumberSemanticSplitter": {
+                "source": "",
+                "tokenizer_name_or_path": "",
+            },
             "SpacyTextSplitter": {
                 "source": "huggingface",
                 "tokenizer_name_or_path": "gpt2",

@@ -218,11 +218,17 @@ def get_loader(loader_name: str, file_path: str, loader_kwargs: Dict = None):
 
 
 @lru_cache()
-def make_text_splitter(splitter_name, chunk_size, chunk_overlap):
+def _make_text_splitter_cached(
+    splitter_name,
+    chunk_size,
+    chunk_overlap,
+    splitter_kwargs_json,
+):
     """
     根据参数获取特定的分词器
     """
     splitter_name = splitter_name or "SpacyTextSplitter"
+    splitter_kwargs = json.loads(splitter_kwargs_json) if splitter_kwargs_json else {}
     try:
         if (
             splitter_name == "MarkdownHeaderTextSplitter"
@@ -254,6 +260,7 @@ def make_text_splitter(splitter_name, chunk_size, chunk_overlap):
                         pipeline="zh_core_web_sm",
                         chunk_size=chunk_size,
                         chunk_overlap=chunk_overlap,
+                        **splitter_kwargs,
                     )
                 except:
                     text_splitter = TextSplitter.from_tiktoken_encoder(
@@ -262,6 +269,7 @@ def make_text_splitter(splitter_name, chunk_size, chunk_overlap):
                         ],
                         chunk_size=chunk_size,
                         chunk_overlap=chunk_overlap,
+                        **splitter_kwargs,
                     )
             elif (
                 Settings.kb_settings.text_splitter_dict[splitter_name]["source"] == "huggingface"
@@ -285,6 +293,7 @@ def make_text_splitter(splitter_name, chunk_size, chunk_overlap):
                     tokenizer=tokenizer,
                     chunk_size=chunk_size,
                     chunk_overlap=chunk_overlap,
+                    **splitter_kwargs,
                 )
             else:
                 try:
@@ -292,10 +301,13 @@ def make_text_splitter(splitter_name, chunk_size, chunk_overlap):
                         pipeline="zh_core_web_sm",
                         chunk_size=chunk_size,
                         chunk_overlap=chunk_overlap,
+                        **splitter_kwargs,
                     )
                 except:
                     text_splitter = TextSplitter(
-                        chunk_size=chunk_size, chunk_overlap=chunk_overlap
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                        **splitter_kwargs,
                     )
     except Exception as e:
         print(e)
@@ -309,12 +321,24 @@ def make_text_splitter(splitter_name, chunk_size, chunk_overlap):
     return text_splitter
 
 
+def make_text_splitter(splitter_name, chunk_size, chunk_overlap, splitter_kwargs: Dict = None):
+    splitter_kwargs_json = json.dumps(splitter_kwargs or {}, sort_keys=True, ensure_ascii=False)
+    return _make_text_splitter_cached(
+        splitter_name,
+        chunk_size,
+        chunk_overlap,
+        splitter_kwargs_json,
+    )
+
+
 class KnowledgeFile:
     def __init__(
         self,
         filename: str,
         knowledge_base_name: str,
         loader_kwargs: Dict = {},
+        text_splitter_name: str = None,
+        text_splitter_kwargs: Dict = None,
     ):
         """
         对应知识库目录中的文件，必须是磁盘上存在的才能进行向量化等操作。
@@ -329,7 +353,8 @@ class KnowledgeFile:
         self.docs = None
         self.splited_docs = None
         self.document_loader_name = get_LoaderClass(self.ext)
-        self.text_splitter_name = Settings.kb_settings.TEXT_SPLITTER_NAME
+        self.text_splitter_name = text_splitter_name or Settings.kb_settings.TEXT_SPLITTER_NAME
+        self.text_splitter_kwargs = text_splitter_kwargs or {}
 
     def file2docs(self, refresh: bool = False):
         if self.docs is None or refresh:
@@ -364,6 +389,7 @@ class KnowledgeFile:
                     splitter_name=self.text_splitter_name,
                     chunk_size=chunk_size,
                     chunk_overlap=chunk_overlap,
+                    splitter_kwargs=self.text_splitter_kwargs,
                 )
             if self.text_splitter_name == "MarkdownHeaderTextSplitter":
                 docs = text_splitter.split_text(docs[0].page_content)
@@ -425,6 +451,8 @@ def files2docs_in_thread(
     chunk_size: int = Settings.kb_settings.CHUNK_SIZE,
     chunk_overlap: int = Settings.kb_settings.OVERLAP_SIZE,
     zh_title_enhance: bool = Settings.kb_settings.ZH_TITLE_ENHANCE,
+    text_splitter_name: str = None,
+    text_splitter_kwargs: Dict = None,
 ) -> Generator:
     """
     利用多线程批量将磁盘文件转化成langchain Document.
@@ -439,12 +467,22 @@ def files2docs_in_thread(
             if isinstance(file, tuple) and len(file) >= 2:
                 filename = file[0]
                 kb_name = file[1]
-                file = KnowledgeFile(filename=filename, knowledge_base_name=kb_name)
+                file = KnowledgeFile(
+                    filename=filename,
+                    knowledge_base_name=kb_name,
+                    text_splitter_name=text_splitter_name,
+                    text_splitter_kwargs=text_splitter_kwargs,
+                )
             elif isinstance(file, dict):
                 filename = file.pop("filename")
                 kb_name = file.pop("kb_name")
                 kwargs.update(file)
-                file = KnowledgeFile(filename=filename, knowledge_base_name=kb_name)
+                file = KnowledgeFile(
+                    filename=filename,
+                    knowledge_base_name=kb_name,
+                    text_splitter_name=text_splitter_name,
+                    text_splitter_kwargs=text_splitter_kwargs,
+                )
             kwargs["file"] = file
             kwargs["chunk_size"] = chunk_size
             kwargs["chunk_overlap"] = chunk_overlap

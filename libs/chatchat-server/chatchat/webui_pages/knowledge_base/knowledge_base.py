@@ -61,6 +61,7 @@ def file_exists(kb: str, selected_rows: List) -> Tuple[str, str]:
 
 
 def knowledge_base_page(api: ApiRequest, is_lite: bool = None):
+    splitter_settings = get_splitter_config()
     try:
         kb_list = {x["kb_name"]: x for x in get_kb_details()}
     except Exception as e:
@@ -173,19 +174,9 @@ def knowledge_base_page(api: ApiRequest, is_lite: bool = None):
             st.session_state["selected_kb_info"] = kb_info
             api.update_kb_info(kb, kb_info)
 
-        # with st.sidebar:
-        with st.expander(
-            "文件处理配置",
-            expanded=True,
-        ):
-            cols = st.columns(3)
-            chunk_size = cols[0].number_input("单段文本最大长度：", 1, 1000, Settings.kb_settings.CHUNK_SIZE)
-            chunk_overlap = cols[1].number_input(
-                "相邻文本重合长度：", 0, chunk_size, Settings.kb_settings.OVERLAP_SIZE
-            )
-            cols[2].write("")
-            cols[2].write("")
-            zh_title_enhance = cols[2].checkbox("开启中文标题加强", Settings.kb_settings.ZH_TITLE_ENHANCE)
+        st.caption(
+            f"当前切分器：{SPLITTER_OPTIONS.get(splitter_settings['text_splitter_name'], splitter_settings['text_splitter_name'])}"
+        )
 
         if st.button(
             "添加文件到知识库",
@@ -196,9 +187,11 @@ def knowledge_base_page(api: ApiRequest, is_lite: bool = None):
                 files,
                 knowledge_base_name=kb,
                 override=True,
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-                zh_title_enhance=zh_title_enhance,
+                chunk_size=splitter_settings["chunk_size"],
+                chunk_overlap=splitter_settings["chunk_overlap"],
+                zh_title_enhance=splitter_settings["zh_title_enhance"],
+                text_splitter_name=splitter_settings["text_splitter_name"],
+                text_splitter_config=splitter_settings["text_splitter_config"],
             )
             if msg := check_success_msg(ret):
                 st.toast(msg, icon="✔")
@@ -299,9 +292,11 @@ def knowledge_base_page(api: ApiRequest, is_lite: bool = None):
                 api.update_kb_docs(
                     kb,
                     file_names=file_names,
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap,
-                    zh_title_enhance=zh_title_enhance,
+                    chunk_size=splitter_settings["chunk_size"],
+                    chunk_overlap=splitter_settings["chunk_overlap"],
+                    zh_title_enhance=splitter_settings["zh_title_enhance"],
+                    text_splitter_name=splitter_settings["text_splitter_name"],
+                    text_splitter_config=splitter_settings["text_splitter_config"],
                 )
                 st.rerun()
 
@@ -339,9 +334,11 @@ def knowledge_base_page(api: ApiRequest, is_lite: bool = None):
                 empty.progress(0.0, "")
                 for d in api.recreate_vector_store(
                     kb,
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap,
-                    zh_title_enhance=zh_title_enhance,
+                    chunk_size=splitter_settings["chunk_size"],
+                    chunk_overlap=splitter_settings["chunk_overlap"],
+                    zh_title_enhance=splitter_settings["zh_title_enhance"],
+                    text_splitter_name=splitter_settings["text_splitter_name"],
+                    text_splitter_config=splitter_settings["text_splitter_config"],
                 ):
                     if msg := check_error_msg(d):
                         st.toast(msg)

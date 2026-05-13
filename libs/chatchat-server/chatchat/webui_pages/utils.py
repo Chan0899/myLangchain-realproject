@@ -19,6 +19,46 @@ from chatchat.utils import build_logger
 
 logger = build_logger()
 
+
+SPLITTER_OPTIONS = {
+    "ChineseRecursiveTextSplitter": "中文递归切分",
+    "MinerUSplitter": "PDF 语义切分（pdfplumber，兼容旧配置）",
+    "PdfplumberSemanticSplitter": "PDF 语义切分（pdfplumber）",
+}
+
+
+def init_splitter_config():
+    defaults = {
+        "text_splitter_name": Settings.kb_settings.TEXT_SPLITTER_NAME,
+        "chunk_size": Settings.kb_settings.CHUNK_SIZE,
+        "chunk_overlap": Settings.kb_settings.OVERLAP_SIZE,
+        "zh_title_enhance": Settings.kb_settings.ZH_TITLE_ENHANCE,
+        "breakpoint_threshold_type": "percentile",
+        "breakpoint_threshold_amount": 95.0,
+        "min_chunk_size": 200,
+    }
+    for key, value in defaults.items():
+        st.session_state.setdefault(key, value)
+
+
+def get_splitter_config() -> Dict[str, Any]:
+    init_splitter_config()
+    splitter_name = st.session_state.get("text_splitter_name", Settings.kb_settings.TEXT_SPLITTER_NAME)
+    config = {
+        "text_splitter_name": splitter_name,
+        "chunk_size": st.session_state.get("chunk_size", Settings.kb_settings.CHUNK_SIZE),
+        "chunk_overlap": st.session_state.get("chunk_overlap", Settings.kb_settings.OVERLAP_SIZE),
+        "zh_title_enhance": st.session_state.get("zh_title_enhance", Settings.kb_settings.ZH_TITLE_ENHANCE),
+        "text_splitter_config": {},
+    }
+    if splitter_name in {"MinerUSplitter", "PdfplumberSemanticSplitter"}:
+        config["text_splitter_config"] = {
+            "breakpoint_threshold_type": st.session_state.get("breakpoint_threshold_type", "percentile"),
+            "breakpoint_threshold_amount": st.session_state.get("breakpoint_threshold_amount", 95.0),
+            "min_chunk_size": st.session_state.get("min_chunk_size", 200),
+        }
+    return config
+
 set_httpx_config()
 
 
@@ -494,6 +534,8 @@ class ApiRequest:
         chunk_size=Settings.kb_settings.CHUNK_SIZE,
         chunk_overlap=Settings.kb_settings.OVERLAP_SIZE,
         zh_title_enhance=Settings.kb_settings.ZH_TITLE_ENHANCE,
+        text_splitter_name=Settings.kb_settings.TEXT_SPLITTER_NAME,
+        text_splitter_config: Dict = None,
         docs: Dict = {},
         not_refresh_vs_cache: bool = False,
     ):
@@ -519,12 +561,16 @@ class ApiRequest:
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
             "zh_title_enhance": zh_title_enhance,
+            "text_splitter_name": text_splitter_name,
+            "text_splitter_config": text_splitter_config or {},
             "docs": docs,
             "not_refresh_vs_cache": not_refresh_vs_cache,
         }
 
         if isinstance(data["docs"], dict):
             data["docs"] = json.dumps(data["docs"], ensure_ascii=False)
+        if isinstance(data["text_splitter_config"], dict):
+            data["text_splitter_config"] = json.dumps(data["text_splitter_config"], ensure_ascii=False)
         response = self.post(
             "/knowledge_base/upload_docs",
             data=data,
@@ -578,6 +624,8 @@ class ApiRequest:
         chunk_size=Settings.kb_settings.CHUNK_SIZE,
         chunk_overlap=Settings.kb_settings.OVERLAP_SIZE,
         zh_title_enhance=Settings.kb_settings.ZH_TITLE_ENHANCE,
+        text_splitter_name=Settings.kb_settings.TEXT_SPLITTER_NAME,
+        text_splitter_config: Dict = None,
         docs: Dict = {},
         not_refresh_vs_cache: bool = False,
     ):
@@ -591,6 +639,8 @@ class ApiRequest:
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
             "zh_title_enhance": zh_title_enhance,
+            "text_splitter_name": text_splitter_name,
+            "text_splitter_config": text_splitter_config or {},
             "docs": docs,
             "not_refresh_vs_cache": not_refresh_vs_cache,
         }
@@ -613,6 +663,8 @@ class ApiRequest:
         chunk_size=Settings.kb_settings.CHUNK_SIZE,
         chunk_overlap=Settings.kb_settings.OVERLAP_SIZE,
         zh_title_enhance=Settings.kb_settings.ZH_TITLE_ENHANCE,
+        text_splitter_name=Settings.kb_settings.TEXT_SPLITTER_NAME,
+        text_splitter_config: Dict = None,
     ):
         """
         对应api.py/knowledge_base/recreate_vector_store接口
@@ -625,6 +677,8 @@ class ApiRequest:
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
             "zh_title_enhance": zh_title_enhance,
+            "text_splitter_name": text_splitter_name,
+            "text_splitter_config": text_splitter_config or {},
         }
 
         response = self.post(
